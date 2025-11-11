@@ -1,0 +1,9 @@
+python-dotenv
+requests
+beautifulsoup4
+urllib3
+requests-cache
+psycopg2
+diskcache
+schedule
+pydantic

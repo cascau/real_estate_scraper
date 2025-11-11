@@ -1,0 +1,5 @@
+/.cache_olx/
+/.venv/
+/http_cache.sqlite
+/olx_cache.sqlite
+/logs/
