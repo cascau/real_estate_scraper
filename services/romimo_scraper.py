@@ -2,7 +2,7 @@ from typing import List
 
 from bs4 import BeautifulSoup
 
-from config import settings
+from config.settings import ROMIMO_URL
 from core.logger_config import setup_logger
 from core.requester import Requester
 from models.offer_request import OfferRequest
@@ -11,22 +11,18 @@ from utils import utils
 logger = setup_logger(__name__)
 
 
-class OLXScraper:
+class RomimoScraper:
     def __init__(self, requester: Requester):
         self.requester = requester
 
     def parse_page(self, html: str) -> List[str]:
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, 'html.parser')
         offers: List[str] = []
-        cards = soup.select('div[data-cy="l-card"]')
+        cards = soup.select('div[class="article-item"]')
         for card in cards:
-            a_tag = card.find('a', href=True)
-            if a_tag:
-                url = a_tag['href']
-                if url.startswith('/'):
-                    url = settings.OLX_URL + url
-                if settings.OLX_URL in url:
-                    offers.append(url)
+            links = card.select("a")
+            if links and links[0] and links[0]['href'] and ROMIMO_URL in links[0]['href']:
+                offers.append(links[0]['href'])
         return offers
 
     def get_all_offers(self, offer_request: OfferRequest, max_pages: int = 5) -> List[str]:
@@ -34,16 +30,16 @@ class OLXScraper:
         all_urls: List[str] = []
 
         while page <= max_pages:
-            page_url = utils.build_olx_card_search_url(offer_request, page)
+            page_url = utils.build_romimo_card_search_url(offer_request, page)
             logger.info(f"Scraping page {page_url}")
             resp = self.requester.get(page_url)
             if resp is None:
-                logger.warning(f"Request returned None for page {page} — stopping.")
+                logger.warning(f"Request returned None for page {page} - stopping.")
                 break
 
             urls = self.parse_page(resp.text)
             if not urls:
-                logger.info(f"No offers found on page {page} — stopping.")
+                logger.info(f"No offers found for page {page} - stopping.")
                 break
 
             logger.info(f"Page {page}: found {len(urls)} offers")

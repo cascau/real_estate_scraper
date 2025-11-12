@@ -1,27 +1,20 @@
 import re
 from datetime import datetime
-import requests
 
 from bs4 import BeautifulSoup
 
+from core.logger_config import setup_logger
 from core.requester import Requester
 from db.location_repository import LocationRepository
 from db.postgres_client import PostgresClient
 from models.location import Location
 from models.offer import Offer
 from models.offer_request import OfferRequest
-from utils.utils import get_geolocation_url
-from core.logger_config import setup_logger
+from utils.utils import get_geolocation
 
 logger = setup_logger(__name__)
 
 breadcrumbs_selector = 'ol[data-testid="breadcrumbs"] > li'
-
-
-def get_geolocation_query(offer: Offer):
-    oras = f",{offer.oras}" if offer.oras else ""
-    zona = f",{offer.zona}" if offer.zona else ""
-    return f"Romania{oras}{zona}"
 
 
 def get_title(soup: BeautifulSoup):
@@ -35,7 +28,7 @@ def get_price(soup: BeautifulSoup):
         return None
     price_str = price_tag.get_text()
     price_str = re.sub("[^0-9.]", "", price_str)
-    return int(price_str)
+    return int(price_str) if not price_str.isdigit() else None
 
 
 def get_description(soup: BeautifulSoup):
@@ -115,19 +108,6 @@ def get_zona(soup: BeautifulSoup):
     zone = crumb.get_text(strip=True).split(" - ")
     return zone.pop().strip() if zone else None
 
-def get_geolocation(self, offer: Offer) -> Location | None:
-    existing_geolocation = self.location_repository.find_location_by_judet_and_zona(offer)
-    if existing_geolocation:
-        return existing_geolocation
-
-    query = get_geolocation_query(offer)
-    url = get_geolocation_url(query)
-    response = requests.get(url)
-    json = response.json()[0] if response.status_code == 200 and len(response.json()) > 0 else None
-    if not json:
-        return None
-    location: Location = Location(offer.judet, offer.zona, json["lat"], json["lon"])
-    return self.location_repository.save_location(location)
 
 class OLXURLOfferParser:
     """ Extracts data from a single olx offer page"""
@@ -174,4 +154,3 @@ class OLXURLOfferParser:
         offer.imagini = get_imagini(soup)
 
         return offer
-

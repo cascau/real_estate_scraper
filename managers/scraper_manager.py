@@ -35,7 +35,7 @@ class ScraperManager:
             saved_count = 0
             error_count = 0
 
-            with ThreadPoolExecutor(max_workers=10) as executor:
+            with ThreadPoolExecutor(max_workers=20) as executor:
                 futures = {executor.submit(scraper.parse_offer, url, req): url for url in urls}
                 for future in as_completed(futures):
                     url = futures[future]
