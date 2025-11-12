@@ -1,74 +1,51 @@
-import random
+# managers/scraper_manager.py
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+from typing import List
 from core.logger_config import setup_logger
-from core.requester import Requester
 from db.offer_repository import OfferRepository
 from db.postgres_client import PostgresClient
+from services.base_scraper import BaseScraper
 from models.offer_request import OfferRequest
-
-from services.olx_scraper import OLXScraper
-from services.olx_offer_parser import OLXURLOfferParser
 
 logger = setup_logger("[SCRAPER_MANAGER]")
 
 
 class ScraperManager:
-    def __init__(self):
+    def __init__(self, requester_factory=None):
         self.db_client = PostgresClient()
         self.repo = OfferRepository(self.db_client)
+        self.scrapers: List[BaseScraper] = []
+        self.requester_factory = requester_factory or (lambda: None)
 
-    def get_all_sources(self):
-        """Returnează toți scrapperii activi din sistem."""
-        # Poți adăuga aici alte surse (StoriaScraper, ImobiliareScraper, etc.)
-        return [
-            {
-                "name": "OLX",
-                "scraper": OLXScraper,
-                "parser": OLXURLOfferParser,
-            },
-        ]
+    def register_scraper(self, scraper: BaseScraper):
+        self.scrapers.append(scraper)
 
-    def run_scraper(self, offer_request: OfferRequest, source_name: str):
-        """Rulează un scraper complet pentru o anumită sursă."""
-        logger.info(f"🔍 Pornim scraping pentru sursa: {source_name} | {offer_request}")
+    def run_scraper(self, scraper: BaseScraper):
+        logger.info(f"🔍 Pornim scraping pentru {scraper.source_name}")
 
-        requester = Requester(min_delay=1.0, max_delay=2.0, cache_enabled=True)
-        scraper = self.get_scraper_by_name(source_name)(requester)
-        parser = self.get_parser_by_name(source_name)(requester)
+        # pentru fiecare scraper, luăm lista lui de OfferRequest
+        offer_requests: List[OfferRequest] = scraper.get_offer_requests()
+        logger.info(f"{scraper.source_name} - {len(offer_requests)} request-uri generate")
 
-        urls = scraper.get_all_offers(max_pages=5)
-        logger.info(f"🌐 {source_name}: găsite {len(urls)} oferte")
+        for req in offer_requests:
+            logger.info(f"[{scraper.source_name}] Procesăm request: {req.__dict__}")
+            urls = scraper.get_all_offers(req, max_pages=5)
+            logger.info(f"[{scraper.source_name}] Găsite {len(urls)} oferte pentru request")
 
-        saved_count = 0
-        error_count = 0
+            saved_count = 0
+            error_count = 0
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_url = {
-                executor.submit(parser.parse_offer, url, offer_request): url for url in urls
-            }
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(scraper.parse_offer, url, req): url for url in urls}
+                for future in as_completed(futures):
+                    url = futures[future]
+                    try:
+                        offer = future.result()
+                        self.repo.save_offer(offer)
+                        saved_count += 1
+                        logger.info(f"[{scraper.source_name}] 💾 Salvat: {offer.titlu}")
+                    except Exception as e:
+                        error_count += 1
+                        logger.exception(f"[{scraper.source_name}] ❌ Eroare la {url}: {e}")
 
-            for future in as_completed(future_to_url):
-                url = future_to_url[future]
-                try:
-                    offer = future.result()
-                    self.repo.save_offer(offer)
-                    saved_count += 1
-                    logger.info(f"[{source_name}] 💾 Salvat: {offer.titlu}")
-                except Exception as e:
-                    error_count += 1
-                    logger.error(f"[{source_name}] ❌ Eroare pentru {url}: {e}")
-
-        logger.info(f"✅ {source_name}: {saved_count} salvate, {error_count} erori\n")
-
-    def  get_scraper_by_name(self, source_name: str):
-        return next(
-            (s["scraper"] for s in self.get_all_sources() if s["name"] == source_name),
-            None,
-        )
-
-    def get_parser_by_name(self, source_name: str):
-        return next(
-            (s["parser"] for s in self.get_all_sources() if s["name"] == source_name),
-            None,
-        )
+            logger.info(f"[{scraper.source_name}] Final request: salvate={saved_count}, erori={error_count}")

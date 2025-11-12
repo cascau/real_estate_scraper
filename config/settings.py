@@ -13,15 +13,10 @@ GLOBAL_HEADERS = {
 
 ## OLX ##
 OLX_URL = "https://www.olx.ro"
-OLX_BASE_URL = f"{OLX_URL}/imobiliare"
+OLX_BASE_URL = f"{OLX_URL}/imobiliare/"
 OLX_VANZARE = "apartamente-garsoniere-de-vanzare"
 OLX_NR_CAMERE = "1-camera"
 OLX_JUDET = "bucuresti-ilfov-judet"
 OLX_SEARCH_NEWEST = "search%5Border%5D=created_at:desc"
 OLX_SEARCH_PRIVATE = "search%5Bprivate_business%5D=private"
-
-def build_olx_card_search_url(page: int = 1) -> str:
-    return (
-        f"{OLX_BASE_URL}/{OLX_VANZARE}/{OLX_NR_CAMERE}/{OLX_JUDET}/"
-        f"?currency={GLOBAL_CURRENCY}&{OLX_SEARCH_NEWEST}&{OLX_SEARCH_PRIVATE}&page={page}"
-    )
+OLX_SEARCH_BUSINESS = "search%5Bprivate_business%5D=business"

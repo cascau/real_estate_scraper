@@ -1,50 +1,26 @@
+# main.py
 import time
-import random
 import schedule
-
 from core.logger_config import setup_logger
+from core.requester import Requester
 from managers.scraper_manager import ScraperManager
-from models.offer_request import OfferRequest
+from services.olx_scraper_full import OLXFullScraper
 
 logger = setup_logger("[MAIN]")
 
 
-def get_offer_requests() -> list[OfferRequest]:
-    vanzatori = ["private", "business"]
-    proprietati = ["garsoniera", "apartament"]
-    tranzactii = ["vanzare"]
-    camere = ["1", "2", "3"]
-    judete = ["Bucuresti-Ilfov"]
-    orase = ["Bucuresti"]
-
-    requests = [
-        OfferRequest(vanzator, prop, tranz, cam, judet, oras)
-        for vanzator in vanzatori
-        for prop in proprietati
-        for tranz in tranzactii
-        for cam in camere
-        for judet in judete
-        for oras in orase
-    ]
-    random.shuffle(requests)
-    return requests
-
-
 def main():
+    requester = Requester(min_delay=1.0, max_delay=2.0, cache_enabled=True)
     manager = ScraperManager()
-    sources = [s["name"] for s in manager.get_all_sources()]
-    offer_requests = get_offer_requests()
 
-    for src in sources:
-        for req in offer_requests:
-            logger.info(f"📆 Programăm {src} - {req.oras}, {req.judet}")
-            schedule.every(5).minutes.do(manager.run_scraper, req, src)
+    manager.register_scraper(OLXFullScraper(requester))
 
-    # Rulează prima dată imediat
-    for src in sources:
-        for req in offer_requests:
-            manager.run_scraper(req, src)
+    for scraper in manager.scrapers:
+        manager.run_scraper(scraper)
 
+    schedule.every(3).minutes.do(lambda: [manager.run_scraper(s) for s in manager.scrapers])
+
+    logger.info("Scheduler pornit. Rulează la fiecare 3 minute.")
     while True:
         schedule.run_pending()
         time.sleep(10)

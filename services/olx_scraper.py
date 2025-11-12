@@ -1,8 +1,12 @@
 from typing import List
+
 from bs4 import BeautifulSoup
-from core.requester import Requester
+
 from config import settings
 from core.logger_config import setup_logger
+from core.requester import Requester
+from models.offer_request import OfferRequest
+from utils import utils
 
 logger = setup_logger(__name__)
 
@@ -25,12 +29,12 @@ class OLXScraper:
                     offers.append(url)
         return offers
 
-    def get_all_offers(self, max_pages: int = 50) -> List[str]:
+    def get_all_offers(self, offer_requst: OfferRequest, max_pages: int = 5) -> List[str]:
         page = 1
         all_urls: List[str] = []
 
         while page <= max_pages:
-            page_url = settings.build_olx_card_search_url(page)
+            page_url = utils.build_olx_card_search_url(offer_requst, page)
             logger.info(f"Scraping page {page_url}")
             resp = self.requester.get(page_url)
             if resp is None:
